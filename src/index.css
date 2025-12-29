@@ -1,0 +1,78 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Patrick+Hand&display=swap');
+
+:root {
+  /* Game Palette - Warm & Playful */
+  --bg-color: #fcf9f2;
+  /* Creamy paper background */
+  --text-main: #2d2a26;
+  --text-scent: #e65100;
+  /* Orange for spicy/vowels */
+  --text-berry: #880e4f;
+  /* Berry for sweet/consonants variation */
+
+  --tile-bg: #ffffff;
+  --tile-shadow: #d1cdc0;
+  --tile-border: #e0dcd0;
+
+  --primary: #f97316;
+  /* Orange-500 */
+  --secondary: #0ea5e9;
+  /* Sky-500 */
+  --accent: #8b5cf6;
+  /* Violet-500 */
+
+  /* UI Elements */
+  --surface-panel: #ffffff;
+  --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+
+  /* Typography */
+  --font-game: 'Outfit', system-ui, sans-serif;
+  --font-hand: 'Patrick Hand', cursive, sans-serif;
+  /* Fallback to sans-serif if not loaded */
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-game);
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button:active {
+  transform: scale(0.95);
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.panel {
+  background: var(--surface-panel);
+  border-radius: 16px;
+  box-shadow: var(--card-shadow);
+  padding: 1.5rem;
+  border: 1px solid var(--tile-border);
+}
+
+/* Utilities */
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
