@@ -34,3 +34,8 @@ android/.gradle
 android/local.properties
 android/*/build
 android/.idea
+
+# iOS
+ios/App/build
+ios/App/Pods
+ios/App/DerivedData
