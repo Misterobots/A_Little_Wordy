@@ -66,6 +66,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }, [state.isVsCpu, state.status, state.opponentSecretWordLength]);
 
+    // Transition to PLAYING when setup is complete
+    useEffect(() => {
+        if (state.status === 'SETUP' && state.mySecretWord && state.opponentSecretWordLength) {
+            const timer = setTimeout(() => {
+                dispatch({ type: 'SET_STATUS', payload: 'PLAYING' });
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, [state.status, state.mySecretWord, state.opponentSecretWordLength]);
+
     useEffect(() => {
         networkManager.initialize((id) => setPeerId(id));
 
