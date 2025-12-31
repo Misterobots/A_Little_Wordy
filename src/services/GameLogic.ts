@@ -41,6 +41,45 @@ export const canFormWord = (word: string, tiles: string[]): boolean => {
     return true;
 };
 
+export const ClueType = {
+    FIRST_LETTER: 'FIRST_LETTER',
+    LAST_LETTER: 'LAST_LETTER',
+    WORD_LENGTH: 'WORD_LENGTH',
+    CONTAINS_LETTER: 'CONTAINS_LETTER'
+} as const;
+
+export type ClueType = typeof ClueType[keyof typeof ClueType];
+
+
+export interface ClueCard {
+    id: string;
+    type: ClueType;
+    cost: number;
+    title: string;
+    description: string;
+    isSpicy: boolean;
+}
+
+export const AVAILABLE_CLUES: ClueCard[] = [
+    { id: 'c1', type: ClueType.FIRST_LETTER, cost: 4, title: 'First Letter', description: 'Reveal the first letter', isSpicy: false },
+    { id: 'c2', type: ClueType.LAST_LETTER, cost: 3, title: 'Last Letter', description: 'Reveal the last letter', isSpicy: false },
+    { id: 'c3', type: ClueType.WORD_LENGTH, cost: 1, title: 'Word Length', description: 'Know how long the word is', isSpicy: false },
+    // { id: 'c4', type: ClueType.CONTAINS_LETTER, cost: 2, title: 'Check Letter', description: 'Check if a letter is in the word', isSpicy: false }
+];
+
+export const resolveClueCard = (clue: ClueCard, secretWord: string): string => {
+    switch (clue.type) {
+        case ClueType.FIRST_LETTER:
+            return `Starts with ${secretWord.charAt(0)}`;
+        case ClueType.LAST_LETTER:
+            return `Ends with ${secretWord.charAt(secretWord.length - 1)}`;
+        case ClueType.WORD_LENGTH:
+            return `Length is ${secretWord.length}`;
+        default:
+            return 'Unknown Clue';
+    }
+};
+
 export const calculateClues = (secret: string, guess: string): number => {
     // Count how many letters they have in common (multiset intersection)
     const secretMap = new Map<string, number>();

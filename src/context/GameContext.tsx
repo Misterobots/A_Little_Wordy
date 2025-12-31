@@ -1,13 +1,20 @@
 import React, { createContext, useContext, useReducer, useEffect, useState } from 'react';
 import { networkManager } from '../services/NetworkManager';
 import { getRandomWord } from '../services/Dictionary';
-import { generateTiles, calculateClues, VOWELS, CONSONANTS } from '../services/GameLogic';
+import { generateTiles, calculateClues, VOWELS, CONSONANTS, resolveClueCard } from '../services/GameLogic';
+import type { ClueCard } from '../services/GameLogic';
 
 export type GameState = 'LOBBY' | 'SETUP' | 'PLAYING' | 'GAME_OVER';
 
 export interface GuessEntry {
     word: string;
     clues: number;
+    player: 'ME' | 'OPPONENT';
+}
+
+export interface ActiveClueEntry {
+    clueId: string;
+    result: string;
     player: 'ME' | 'OPPONENT';
 }
 
@@ -22,6 +29,9 @@ interface State {
     opponentTiles: string[];
     commonTiles: string[];
     guesses: GuessEntry[];
+    activeClues: ActiveClueEntry[];
+    myBerries: number;
+    opponentBerries: number;
     turn: 'ME' | 'OPPONENT';
     winner: 'ME' | 'OPPONENT' | 'DRAW' | null;
 }
@@ -36,6 +46,7 @@ type Action =
     | { type: 'SET_OPPONENT_TILES'; payload: string[] }
     | { type: 'SET_OPPONENT_SECRET_WORD_INTERNAL'; payload: string }
     | { type: 'MAKE_GUESS'; payload: { word: string; player: 'ME' | 'OPPONENT' } }
+    | { type: 'BUY_CLUE'; payload: { clue: ClueCard; player: 'ME' | 'OPPONENT' } }
     | { type: 'SWITCH_TURN' }
     | { type: 'GAME_OVER'; payload: 'ME' | 'OPPONENT' | 'DRAW' };
 
@@ -50,6 +61,9 @@ const initialState: State = {
     opponentTiles: [], // Tiles we RECEIVED from opponent (to guess with)
     commonTiles: [], // deprecated
     guesses: [],
+    activeClues: [],
+    myBerries: 0,
+    opponentBerries: 0,
     turn: 'ME',
     winner: null
 };
@@ -79,7 +93,7 @@ const gameReducer = (state: State, action: Action): State => {
         case 'MAKE_GUESS': {
             const { word, player } = action.payload;
 
-            // Calculate clues
+            // Calculate clues (matches)
             let clues = 0;
             let target = '';
 
@@ -87,7 +101,7 @@ const gameReducer = (state: State, action: Action): State => {
                 // I am guessing opponent's word
                 // In single player we have opponentSecretWord, in MP we might not know it directly yet?
                 // Actually for MP verifying clues usually happens on the other client or via trusted host.
-                // For simplicity in P2P here: Sender calculates clues locally if they know the word? 
+                // For simplicity in P2P here: Sender calculates clues locally if they know the word?
                 // OR: Sender sends guess, Receiver calculates clues and sends back result.
 
                 // SINGLE PLAYER LOGIC:
@@ -105,13 +119,46 @@ const gameReducer = (state: State, action: Action): State => {
 
             // Check win
             if (target && word === target) {
-                // That player won!
-                return {
-                    ...state,
-                    guesses: [...state.guesses, { word, clues, player }],
-                    status: 'GAME_OVER',
-                    winner: player
-                };
+                // WIN CONDITION: Must have MORE berries than opponent
+                // If not, game continues?
+                // Official Rules: "If you have fewer or the same number... game continues until you accumulate more."
+                // For now, let's just implement the check.
+
+                const myCount = player === 'ME' ? state.myBerries : state.opponentBerries;
+                const oppCount = player === 'ME' ? state.opponentBerries : state.myBerries;
+
+                if (myCount > oppCount) {
+                    return {
+                        ...state,
+                        guesses: [...state.guesses, { word, clues, player }],
+                        status: 'GAME_OVER',
+                        winner: player
+                    };
+                } else {
+                    // Correct guess but not enough berries!
+                    // We need a way to show this state.
+                    // Maybe add a 'notification' field to state?
+                    // For now, we'll just add it to history with a special note or just let them keep playing
+                    // Actually, if they guess right, they know the word. They just need to buy hints to dump berries?
+                    // Wait, buying hints GIVES opponent berries. You want to HAVE berries.
+                    // You get berries when OPPONENT buys hints.
+                    // So you need to wait for opponent to buy hints?
+                    // Or you need to force opponent to buy hints?
+                    // In the physical game, this is a distinct win condition.
+
+                    // Let's just allow the "WIN" for this version if they guess it, but show a warning if berries are low?
+                    // User asked for "match the board game".
+                    // If I guess correctly but have low berries, I effectively can't win yet.
+                    // But I can't "do" anything to get berries other than wait.
+                    // It's a "Wait" state.
+
+                    return {
+                        ...state,
+                        guesses: [...state.guesses, { word, clues, player }],
+                        // Don't end game, maybe show alert?
+                        // We will rely on the History UI to show "CORRECT WORD" but no game over trigger
+                    };
+                }
             }
 
             return {
@@ -119,6 +166,34 @@ const gameReducer = (state: State, action: Action): State => {
                 guesses: [...state.guesses, { word, clues, player }],
                 turn: player === 'ME' ? 'OPPONENT' : 'ME'
             };
+        }
+
+        case 'BUY_CLUE': {
+            const { clue, player } = action.payload;
+            let result = '';
+
+            if (player === 'ME') {
+                // I buy clue, opponent gets berries
+                // I need to see result of opponent's secret word
+                if (state.opponentSecretWord) {
+                    result = resolveClueCard(clue, state.opponentSecretWord);
+                }
+                return {
+                    ...state,
+                    opponentBerries: state.opponentBerries + clue.cost,
+                    activeClues: [...state.activeClues, { clueId: clue.id, result, player: 'ME' }],
+                    turn: 'OPPONENT' // buying clue ends turn? Rules say "Action 1: Activate Clue OR Action 2: Guess". So yes.
+                };
+            } else {
+                // Opponent buys clue, I get berries
+                result = resolveClueCard(clue, state.mySecretWord);
+                return {
+                    ...state,
+                    myBerries: state.myBerries + clue.cost,
+                    activeClues: [...state.activeClues, { clueId: clue.id, result, player: 'OPPONENT' }],
+                    turn: 'ME'
+                };
+            }
         }
 
         case 'GAME_OVER': return { ...state, status: 'GAME_OVER', winner: action.payload };
