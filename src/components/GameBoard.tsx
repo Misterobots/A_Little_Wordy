@@ -7,7 +7,7 @@ import { isValidWord } from '../services/Dictionary';
 export const GameBoard = () => {
     const { state, dispatch, network } = useGame();
 
-
+    const [guessInput, setGuessInput] = React.useState('');
 
     const [secretInput, setSecretInput] = React.useState('');
     const [error, setError] = React.useState('');
@@ -25,6 +25,16 @@ export const GameBoard = () => {
 
         network.sendMessage({ type: 'GAME_DATA', payload: { action: 'SET_SECRET_LENGTH', length: secretInput.length } });
         dispatch({ type: 'SET_SECRET_WORD', payload: secretInput.toUpperCase() });
+    };
+
+    const handleGuess = () => {
+        if (!guessInput) return;
+        if (!isValidWord(guessInput)) {
+            // maybe show temporary error?
+            return;
+        }
+        dispatch({ type: 'MAKE_GUESS', payload: { word: guessInput.toUpperCase(), player: 'ME' } });
+        setGuessInput('');
     };
 
     if (state.status === 'SETUP') {
@@ -87,17 +97,7 @@ export const GameBoard = () => {
         );
     }
 
-    const [guessInput, setGuessInput] = React.useState('');
 
-    const handleGuess = () => {
-        if (!guessInput) return;
-        if (!isValidWord(guessInput)) {
-            // maybe show temporary error?
-            return;
-        }
-        dispatch({ type: 'MAKE_GUESS', payload: { word: guessInput.toUpperCase(), player: 'ME' } });
-        setGuessInput('');
-    };
 
     if (state.status === 'GAME_OVER') {
         return (
