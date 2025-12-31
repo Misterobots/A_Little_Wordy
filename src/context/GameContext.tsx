@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useState } from 'react';
 import { networkManager } from '../services/NetworkManager';
 import { getRandomWord } from '../services/Dictionary';
-import { generateTiles, calculateClues } from '../services/GameLogic';
+import { generateTiles, calculateClues, VOWELS, CONSONANTS } from '../services/GameLogic';
 
 export type GameState = 'LOBBY' | 'SETUP' | 'PLAYING' | 'GAME_OVER';
 
@@ -19,6 +19,7 @@ interface State {
     opponentSecretWordLength: number | null;
     opponentSecretWord: string | null; // For CPU or revealing at end
     myTiles: string[]; // Not really used in this variant, usually shared
+    opponentTiles: string[];
     commonTiles: string[];
     guesses: GuessEntry[];
     turn: 'ME' | 'OPPONENT';
@@ -31,7 +32,9 @@ type Action =
     | { type: 'SET_SECRET_WORD'; payload: string }
     | { type: 'SET_OPPONENT_SECRET_LENGTH'; payload: number }
     | { type: 'START_SINGLE_PLAYER' }
-    | { type: 'SET_COMMON_TILES'; payload: string[] }
+    | { type: 'SET_MY_TILES'; payload: string[] }
+    | { type: 'SET_OPPONENT_TILES'; payload: string[] }
+    | { type: 'SET_OPPONENT_SECRET_WORD_INTERNAL'; payload: string }
     | { type: 'MAKE_GUESS'; payload: { word: string; player: 'ME' | 'OPPONENT' } }
     | { type: 'SWITCH_TURN' }
     | { type: 'GAME_OVER'; payload: 'ME' | 'OPPONENT' | 'DRAW' };
@@ -44,11 +47,16 @@ const initialState: State = {
     opponentSecretWordLength: null,
     opponentSecretWord: null,
     myTiles: [],
-    commonTiles: [],
+    opponentTiles: [], // Tiles we RECEIVED from opponent (to guess with)
+    commonTiles: [], // deprecated
     guesses: [],
-    turn: 'ME', // Host starts?
+    turn: 'ME',
     winner: null
 };
+
+/* ... skip to listener ... */
+
+
 
 const GameContext = createContext<{
     state: State;
@@ -63,8 +71,10 @@ const gameReducer = (state: State, action: Action): State => {
         case 'SET_HOST': return { ...state, isHost: action.payload, turn: action.payload ? 'ME' : 'OPPONENT' };
         case 'SET_SECRET_WORD': return { ...state, mySecretWord: action.payload };
         case 'SET_OPPONENT_SECRET_LENGTH': return { ...state, opponentSecretWordLength: action.payload };
-        case 'START_SINGLE_PLAYER': return { ...state, status: 'SETUP', isVsCpu: true, isHost: true, opponentSecretWord: getRandomWord() }; // Pre-gen CPU word
-        case 'SET_COMMON_TILES': return { ...state, commonTiles: action.payload };
+        case 'START_SINGLE_PLAYER': return { ...state, status: 'SETUP', isVsCpu: true, isHost: true };
+        case 'SET_MY_TILES': return { ...state, myTiles: action.payload };
+        case 'SET_OPPONENT_TILES': return { ...state, opponentTiles: action.payload };
+        case 'SET_OPPONENT_SECRET_WORD_INTERNAL': return { ...state, opponentSecretWord: action.payload };
 
         case 'MAKE_GUESS': {
             const { word, player } = action.payload;
@@ -125,23 +135,64 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     useEffect(() => {
         if (state.isVsCpu && state.status === 'SETUP' && !state.opponentSecretWordLength && state.opponentSecretWord) {
             // We set the word in the reducer for single player, just need to set the length to trigger UI
-            // But wait, the previous logic was using a timeout. Let's keep it simple.
             // Reducer already set opponentSecretWord.
             dispatch({ type: 'SET_OPPONENT_SECRET_LENGTH', payload: state.opponentSecretWord.length });
         }
     }, [state.isVsCpu, state.status, state.opponentSecretWord]);
 
-    // Generate Tiles when entering Setup
+    // Generate Tiles when entering Setup (Single Player)
     useEffect(() => {
-        if (state.status === 'SETUP' && state.commonTiles.length === 0) {
-            if (state.isHost) {
-                const tiles = generateTiles();
-                dispatch({ type: 'SET_COMMON_TILES', payload: tiles });
-                // If MP, send tiles to opponent
-                networkManager.sendMessage({ type: 'GAME_DATA', payload: { action: 'SET_TILES', tiles } });
+        if (state.status === 'SETUP' && state.myTiles.length === 0 && state.isVsCpu) {
+            // 1. Generate Player Tiles
+            const myTiles = generateTiles();
+
+            // 2. Generate CPU Word & Tiles
+            // CPU needs a valid word that fits in 4V/7C structure
+            // Simplified approach: Pick a word first, then ensure tiles exist
+            let cpuWord = getRandomWord();
+            while (cpuWord.length > 7) { // mild constraint to make it easier to fit
+                cpuWord = getRandomWord();
             }
+
+            // Construct CPU tiles: ensure they contain the word
+            const cpuTiles: string[] = [];
+
+
+            // Add word letters
+            let vCount = 0;
+            let cCount = 0;
+
+            for (const char of cpuWord) {
+                cpuTiles.push(char);
+                if (['A', 'E', 'I', 'O', 'U'].includes(char)) vCount++;
+                else cCount++;
+            }
+
+            // Fill remainder
+            while (vCount < 4) {
+                cpuTiles.push(VOWELS[Math.floor(Math.random() * VOWELS.length)]);
+                vCount++;
+            }
+            while (cCount < 7) {
+                cpuTiles.push(CONSONANTS[Math.floor(Math.random() * CONSONANTS.length)]);
+                cCount++;
+            }
+
+            // If word was heavy on vowels/consonants we might have > 4 or > 7
+            // This is "good enough" for v1 - the constraint is 11 tiles total mostly
+            // Truncate or Fill to strictly 11 if needed? 
+            // Let's just shuffle and set.
+
+            dispatch({ type: 'SET_MY_TILES', payload: myTiles });
+            dispatch({ type: 'SET_OPPONENT_TILES', payload: cpuTiles.sort(() => Math.random() - 0.5) });
+
+            // Set CPU word
+            // We need to set this in state so we can check win condition later
+            // BUT we also need to set the length for the UI
+            dispatch({ type: 'SET_OPPONENT_SECRET_WORD_INTERNAL', payload: cpuWord });
+            dispatch({ type: 'SET_OPPONENT_SECRET_LENGTH', payload: cpuWord.length });
         }
-    }, [state.status, state.isHost]);
+    }, [state.status, state.myTiles, state.isVsCpu]);
 
 
     // Transition to PLAYING when setup is complete
@@ -173,7 +224,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     dispatch({ type: 'SET_OPPONENT_SECRET_LENGTH', payload: msg.payload.length });
                 }
                 if (msg.payload.action === 'SET_TILES') {
-                    dispatch({ type: 'SET_COMMON_TILES', payload: msg.payload.tiles });
+                    dispatch({ type: 'SET_OPPONENT_TILES', payload: msg.payload.tiles });
                 }
                 // TODO: Add GUESS handling for MP
             }

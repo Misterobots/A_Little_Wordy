@@ -8,10 +8,7 @@ export const CONSONANTS = [
 
 
 export const generateTiles = (): string[] => {
-    // Standard distribution based on Scrabble-ish weights or just simple random for now
-    // Let's go with a balanced set: 4 Vowels, 7 Consonants maybe? Or just random.
-    // The original game usually has a mix. Let's do 4 Vowels and 8 Consonants for 12 tiles total.
-
+    // 4 Vowels, 7 Consonants = 11 Tiles
     const tiles: string[] = [];
 
     // Add 4 random vowels
@@ -19,13 +16,29 @@ export const generateTiles = (): string[] => {
         tiles.push(VOWELS[Math.floor(Math.random() * VOWELS.length)]);
     }
 
-    // Add 8 random consonants
-    for (let i = 0; i < 8; i++) {
+    // Add 7 random consonants
+    for (let i = 0; i < 7; i++) {
         tiles.push(CONSONANTS[Math.floor(Math.random() * CONSONANTS.length)]);
     }
 
     // Shuffle
     return tiles.sort(() => Math.random() - 0.5);
+};
+
+export const canFormWord = (word: string, tiles: string[]): boolean => {
+    const tileCounts = new Map<string, number>();
+    for (const t of tiles) {
+        tileCounts.set(t, (tileCounts.get(t) || 0) + 1);
+    }
+
+    for (const char of word.toUpperCase()) {
+        const count = tileCounts.get(char);
+        if (!count || count <= 0) {
+            return false;
+        }
+        tileCounts.set(char, count - 1);
+    }
+    return true;
 };
 
 export const calculateClues = (secret: string, guess: string): number => {

@@ -3,6 +3,7 @@ import { useGame } from '../context/GameContext';
 import { Tile } from './Tile';
 
 import { isValidWord } from '../services/Dictionary';
+import { canFormWord } from '../services/GameLogic';
 
 export const GameBoard = () => {
     const { state, dispatch, network } = useGame();
@@ -23,9 +24,16 @@ export const GameBoard = () => {
             return;
         }
 
+        // Validate that the word can be formed from MY tiles
+        if (!canFormWord(secretInput, state.myTiles)) {
+            setError('Must use your tiles!');
+            return;
+        }
+
         network.sendMessage({ type: 'GAME_DATA', payload: { action: 'SET_SECRET_LENGTH', length: secretInput.length } });
         dispatch({ type: 'SET_SECRET_WORD', payload: secretInput.toUpperCase() });
     };
+
 
     const handleGuess = () => {
         if (!guessInput) return;
@@ -92,6 +100,15 @@ export const GameBoard = () => {
                     >
                         Lock In Word
                     </button>
+
+                    <div style={{ marginTop: '2rem' }}>
+                        <p style={{ color: '#999', fontSize: '0.9rem', marginBottom: '0.5rem' }}>YOUR TILES</p>
+                        <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                            {state.myTiles.map((l, i) => (
+                                <Tile key={i} letter={l} type={['A', 'E', 'I', 'O', 'U'].includes(l) ? 'vowel' : 'consonant'} />
+                            ))}
+                        </div>
+                    </div>
                 </div>
             </div>
         );
@@ -144,10 +161,14 @@ export const GameBoard = () => {
                 </div>
             </header>
 
+
+
             <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                <h2 style={{ marginBottom: '1rem', color: '#94a3b8', fontSize: '0.9rem', letterSpacing: '1px' }}>COMMON TILES</h2>
+                <h2 style={{ marginBottom: '1rem', color: '#94a3b8', fontSize: '0.9rem', letterSpacing: '1px' }}>
+                    OPPONENT'S TILES
+                </h2>
                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-                    {state.commonTiles.map((l, i) => (
+                    {state.opponentTiles.map((l, i) => (
                         <Tile key={i} letter={l} type={['A', 'E', 'I', 'O', 'U'].includes(l) ? 'vowel' : 'consonant'} />
                     ))}
                 </div>
@@ -168,32 +189,34 @@ export const GameBoard = () => {
                 ))}
             </div>
 
-            {state.turn === 'ME' && (
-                <div style={{
-                    position: 'fixed', bottom: 0, left: 0, right: 0,
-                    padding: '1rem', background: 'white', borderTop: '1px solid #eee',
-                    display: 'flex', gap: '0.5rem', justifyContent: 'center'
-                }}>
-                    <input
-                        value={guessInput}
-                        onChange={(e) => setGuessInput(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
-                        placeholder="Guess a word..."
-                        style={{
-                            padding: '1rem', fontSize: '1.2rem', borderRadius: '8px', border: '2px solid #ddd', width: '60%'
-                        }}
-                    />
-                    <button
-                        onClick={handleGuess}
-                        disabled={!guessInput}
-                        style={{
-                            padding: '1rem', fontSize: '1.2rem', borderRadius: '8px', border: 'none',
-                            background: guessInput ? 'var(--primary)' : '#ccc', color: 'white', fontWeight: 700
-                        }}
-                    >
-                        GUESS
-                    </button>
-                </div>
-            )}
-        </div>
+            {
+                state.turn === 'ME' && (
+                    <div style={{
+                        position: 'fixed', bottom: 0, left: 0, right: 0,
+                        padding: '1rem', background: 'white', borderTop: '1px solid #eee',
+                        display: 'flex', gap: '0.5rem', justifyContent: 'center'
+                    }}>
+                        <input
+                            value={guessInput}
+                            onChange={(e) => setGuessInput(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
+                            placeholder="Guess a word..."
+                            style={{
+                                padding: '1rem', fontSize: '1.2rem', borderRadius: '8px', border: '2px solid #ddd', width: '60%'
+                            }}
+                        />
+                        <button
+                            onClick={handleGuess}
+                            disabled={!guessInput}
+                            style={{
+                                padding: '1rem', fontSize: '1.2rem', borderRadius: '8px', border: 'none',
+                                background: guessInput ? 'var(--primary)' : '#ccc', color: 'white', fontWeight: 700
+                            }}
+                        >
+                            GUESS
+                        </button>
+                    </div>
+                )
+            }
+        </div >
     );
 };
